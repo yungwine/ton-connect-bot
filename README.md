@@ -1,6 +1,8 @@
 # ton-connect-bot
 A simple bot written on Python to interact with TON wallets using Ton Connect protocol
 
+The running public instance can be found at https://t.me/test_tonconnect_bot
+
 ## How to launch
 
 ### Redis
