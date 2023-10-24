@@ -23,5 +23,5 @@ MANIFEST_URL='https://raw.githubusercontent.com/XaBbl4/pytonconnect/main/pytonco
 ### Run bot
 
 ```python
-python3 main.py
+python3 src/main.py
 ```
