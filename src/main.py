@@ -2,6 +2,8 @@ import sys
 import logging
 import asyncio
 import time
+from io import BytesIO
+import qrcode
 
 import pytonconnect.exceptions
 from pytoniq_core import Address
@@ -14,7 +16,7 @@ from connector import get_connector
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, BufferedInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
@@ -47,7 +49,11 @@ async def command_start_handler(message: Message):
 @dp.message(Command('transaction'))
 async def send_transaction(message: Message):
     connector = get_connector(message.chat.id)
-    await connector.restore_connection()
+    connected = await connector.restore_connection()
+    if not connected:
+        await message.answer('Connect wallet first!')
+        return
+
     transaction = {
         'valid_until': int(time.time() + 3600),
         'messages': [
@@ -83,14 +89,22 @@ async def connect_wallet(message: Message, wallet_name: str):
             wallet = w
 
     if wallet is None:
-        raise Exception('Unknown wallet')
+        raise Exception(f'Unknown wallet: {wallet_name}')
 
     generated_url = await connector.connect(wallet)
 
     mk_b = InlineKeyboardBuilder()
     mk_b.button(text='Connect', url=generated_url)
 
-    await message.answer(text='Connect wallet within 3 minutes', reply_markup=mk_b.as_markup())
+    img = qrcode.make(generated_url)
+    stream = BytesIO()
+    img.save(stream)
+    file = BufferedInputFile(file=stream.getvalue(), filename='qrcode')
+
+    await message.answer_photo(photo=file, caption='Connect wallet within 3 minutes', reply_markup=mk_b.as_markup())
+
+    mk_b = InlineKeyboardBuilder()
+    mk_b.button(text='Start', callback_data='start')
 
     for i in range(1, 180):
         await asyncio.sleep(1)
@@ -98,12 +112,9 @@ async def connect_wallet(message: Message, wallet_name: str):
             if connector.account.address:
                 wallet_address = connector.account.address
                 wallet_address = Address(wallet_address).to_str(is_bounceable=False)
-                await message.answer(f'You are connected with address <code>{wallet_address}</code>')
+                await message.answer(f'You are connected with address <code>{wallet_address}</code>', reply_markup=mk_b.as_markup())
                 logger.info(f'Connected with address: {wallet_address}')
             return
-
-    mk_b = InlineKeyboardBuilder()
-    mk_b.button(text='Start', callback_data='start')
 
     await message.answer(f'Timeout error!', reply_markup=mk_b.as_markup())
 
